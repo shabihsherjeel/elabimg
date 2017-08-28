@@ -11,6 +11,7 @@ RUN apk upgrade -U -a && apk add --update \
     build-base \
     coreutils \
     curl \
+    freetype \
     ghostscript \
     git \
     graphicsmagick-dev \
@@ -24,6 +25,8 @@ RUN apk upgrade -U -a && apk add --update \
     php7-ctype \
     php7-dev \
     php7-dom \
+    # required by mpdf for transparent png
+    php7-gd \
     php7-gettext \
     php7-fileinfo \
     php7-fpm \
@@ -55,7 +58,7 @@ RUN echo "$(curl -sS https://composer.github.io/installer.sig) -" > composer-set
     && php composer-setup.php && rm composer-setup.php*
 
 # install composer dependencies
-RUN /elabftw/composer.phar install --no-dev
+RUN /elabftw/composer.phar install --no-dev -a
 
 # nginx will run on port 443
 EXPOSE 443
@@ -66,7 +69,7 @@ COPY ./src/supervisord.conf /etc/supervisord.conf
 COPY ./src/run.sh /run.sh
 
 # start
-ENTRYPOINT exec /run.sh
+CMD ["/run.sh"]
 
 # define mountable directories
 VOLUME /elabftw
