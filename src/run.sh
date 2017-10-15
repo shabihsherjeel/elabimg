@@ -11,6 +11,8 @@ getEnv() {
 	disable_https=${DISABLE_HTTPS:-false}
     enable_letsencrypt=${ENABLE_LETSENCRYPT:-false}
 	secret_key=${SECRET_KEY}
+    max_php_memory=${MAX_PHP_MEMORY:-256M}
+    max_upload_size=${MAX_UPLOAD_SIZE:-100M}
 }
 
 # fullchain.pem and privkey.pem should be in a volume linked to /ssl
@@ -70,6 +72,8 @@ nginxConf() {
 	sed -i -e "s/localhost/$server_name/g" /etc/nginx/conf.d/elabftw.conf
     # fix upload permissions
     chown -R nginx:nginx /var/lib/nginx
+    # remove the listen on IPv6 found in the default server conf file
+    sed -i -e "s/listen \[::\]:80/#listen \[::\]:80/" /etc/nginx/conf.d/default.conf
 }
 
 phpfpmConf() {
@@ -87,13 +91,13 @@ phpfpmConf() {
     # increase max number of simultaneous requests
     sed -i -e "s/pm.max_children = 5/pm.max_children = 50/g" /etc/php7/php-fpm.d/www.conf
     # allow using more memory
-    sed -i -e "s/;php_admin_value[memory_limit] = 32M/php_admin_value[memory_limit] = 256M/" /etc/php7/php-fpm.d/www.conf
+    sed -i -e "s/;php_admin_value\[memory_limit\] = 32M/php_admin_value\[memory_limit\] = ${max_php_memory}/" /etc/php7/php-fpm.d/www.conf
 }
 
 phpConf() {
 	# php config
 	sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" /etc/php7/php.ini
-	sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = 100M/g" /etc/php7/php.ini
+	sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = ${max_upload_size}/g" /etc/php7/php.ini
 	sed -i -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g" /etc/php7/php.ini
     # we want a safe cookie/session
     sed -i -e "s/session.cookie_httponly\s*=/session.cookie_httponly = true/" /etc/php7/php.ini
