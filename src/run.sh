@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 # elabftw-docker start script for alpine-linux base image
 
 # get env values
 getEnv() {
-	db_host=${DB_HOST}
+	db_host=${DB_HOST:-localhost}
 	db_name=${DB_NAME:-elabftw}
 	db_user=${DB_USER:-elabftw}
 	db_password=${DB_PASSWORD}
@@ -13,6 +13,9 @@ getEnv() {
 	secret_key=${SECRET_KEY}
     max_php_memory=${MAX_PHP_MEMORY:-256M}
     max_upload_size=${MAX_UPLOAD_SIZE:-100M}
+    php_timezone=${PHP_TIMEZONE:-Europe/Paris}
+    set_real_ip=${SET_REAL_IP:-false}
+    set_real_ip_from=${SET_REAL_IP_FROM:-192.168.31.48}
 }
 
 # fullchain.pem and privkey.pem should be in a volume linked to /ssl
@@ -36,13 +39,6 @@ generateCert() {
     fi
 }
 
-# generate Diffie-Hellman parameter for DHE ciphersuites
-generateDh() {
-    if [ ! -f /etc/nginx/certs/dhparam.pem ]; then
-        openssl dhparam -out /etc/nginx/certs/dhparam.pem 2048
-    fi
-}
-
 nginxConf() {
 	# Switch http or https
 	# false by default
@@ -55,7 +51,7 @@ nginxConf() {
         if (! $enable_letsencrypt); then
             generateCert
         fi
-        generateDh
+        sh /etc/nginx/generate-dhparam.sh
 		# activate an HTTPS server listening on port 443
 		ln -s /etc/nginx/https.conf /etc/nginx/conf.d/elabftw.conf
         if ($enable_letsencrypt); then
@@ -74,6 +70,20 @@ nginxConf() {
     chown -R nginx:nginx /var/lib/nginx
     # remove the listen on IPv6 found in the default server conf file
     sed -i -e "s/listen \[::\]:80/#listen \[::\]:80/" /etc/nginx/conf.d/default.conf
+
+    # SET REAL IP CONFIG
+    if ($set_real_ip); then
+        # read the IP addresses from env
+        IFS=', ' read -r -a ip_arr <<< "${set_real_ip_from}"
+        conf_string=""
+        for element in "${ip_arr[@]}"
+        do
+            conf_string+="set_real_ip_from ${element};"
+        done
+        sed -i -e "s/#REAL_IP_CONF/${conf_string}/" /etc/nginx/common.conf
+        # enable real_ip_header config
+        sed -i -e "s/#real_ip_header X-Forwarded-For;/real_ip_header X-Forwarded-For;/" /etc/nginx/common.conf
+    fi
 }
 
 phpfpmConf() {
@@ -104,11 +114,24 @@ phpConf() {
     sed -i -e "s/;session.cookie_secure\s*=/session.cookie_secure = true/" /etc/php7/php.ini
     sed -i -e "s/session.use_strict_mode\s*=\s*0/session.use_strict_mode = 1/" /etc/php7/php.ini
 	# the sessions are stored in a separate dir
-	sed -i -e "s;session.save_path = \"/tmp\";session.save_path = \"/sessions\";g" /etc/php7/php.ini
+	sed -i -e "s:;session.save_path = \"/tmp\":session.save_path = \"/sessions\":" /etc/php7/php.ini
 	mkdir -p /sessions
+	chown nginx:nginx /sessions
+    chmod 700 /sessions
+    # disable url_fopen http://php.net/allow-url-fopen
+    sed -i -e "s/allow_url_fopen = On/allow_url_fopen = Off/" /etc/php7/php.ini
     # enable opcache
     sed -i -e "s/;opcache.enable=1/opcache.enable=1/" /etc/php7/php.ini
-	chown nginx:nginx /sessions
+    # config for timezone, use : because timezone will contain /
+    sed -i -e "s:;date.timezone =:date.timezone = $php_timezone:" /etc/php7/php.ini
+    # enable open_basedir to restrict PHP's ability to read files
+    # use # for separator because we cannot use : ; / or _
+    sed -i -e "s#;open_basedir =#open_basedir = /elabftw/:/tmp/#" /etc/php7/php.ini
+    # use longer session id length
+    sed -i -e "s/session.sid_length = 26/session.sid_length = 42/" /etc/php7/php.ini
+    # disable some dangerous functions that we don't use
+    sed -i -e "s/disable_functions =/disable_functions = php_uname, getmyuid, getmypid, passthru, leak, listen, diskfreespace, tmpfile, link, ignore_user_abord, shell_exec, dl, set_time_limit, system, highlight_file, source, show_source, fpaththru, virtual, posix_ctermid, posix_getcwd, posix_getegid, posix_geteuid, posix_getgid, posix_getgrgid, posix_getgrnam, posix_getgroups, posix_getlogin, posix_getpgid, posix_getpgrp, posix_getpid, posix_getppid, posix_getpwnam, posix_getpwuid, posix_getrlimit, posix_getsid, posix_getuid, posix_isatty, posix_kill, posix_mkfifo, posix_setegid, posix_seteuid, posix_setgid, posix_setpgid, posix_setsid, posix_setuid, posix_times, posix_ttyname, posix_uname, proc_open, proc_close, proc_get_status, proc_nice, proc_terminate, phpinfo/" /etc/php7/php.ini
+
 }
 
 elabftwConf() {
@@ -126,7 +149,7 @@ writeConfigFile() {
 	define('DB_PASSWORD', '${db_password}');
 	define('ELAB_ROOT', '/elabftw/');
 	define('SECRET_KEY', '${secret_key}');"
-	echo $config > /elabftw/config.php
+	echo "$config" > /elabftw/config.php
     chown nginx:nginx /elabftw/config.php
     chmod 700 /elabftw/config.php
 }
