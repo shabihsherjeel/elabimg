@@ -4,7 +4,6 @@ FROM alpine:3.13
 # select version or branch here
 ARG ELABFTW_VERSION demo
 ENV ELABFTW_VERSION $ELABFTW_VERSION
->>>>>>> hypernext
 
 # this is versioning for the container image
 ARG ELABIMG_VERSION=2.4.0
