@@ -1,6 +1,18 @@
 # Container image version
 # Note: the version here is from Dockerfile:ELABIMG_VERSION not the tagged one
 
+# 3.0.0
+
+* BREAKING CHANGE FOR DEVELOPERS ONLY: the `dev` branch is no more. Use DEV_MODE=true env var instead and use `hypernext` branch for the dev image.
+* Use custom compiled nginx instead of the packaged version (#20)
+* Rework placeholders syntax in nginx config files
+* Add configurable value for worker_processes setting: NGINX_WORK_PROC (default: auto)
+* Change labels org to net.elabftw
+* Group steps together where it makes sense
+* Remove useless VOLUME instructions
+* Add a message on startup with running versions
+* Add a config option to have less messages on startup (SILENT_INIT)
+
 # 2.6.1
 * Modify also the memory_limit value in php.ini
 
