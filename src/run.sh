@@ -24,6 +24,7 @@ getEnv() {
     unset SECRET_KEY
     max_php_memory=${MAX_PHP_MEMORY:-256M}
     max_upload_size=${MAX_UPLOAD_SIZE:-100M}
+    upload_chunk_size=${UPLOAD_CHUNK_SIZE:-100M}
     php_timezone=${PHP_TIMEZONE:-Europe/Paris}
     set_real_ip=${SET_REAL_IP:-false}
     set_real_ip_from=${SET_REAL_IP_FROM:-192.168.31.48}
@@ -223,7 +224,8 @@ writeConfigFile() {
     define('DB_USER', '${db_user}');
     define('DB_PASSWORD', '${db_password}');
     define('DB_CERT_PATH', '${db_cert_path}');
-    define('SECRET_KEY', '${secret_key}');"
+    define('SECRET_KEY', '${secret_key}');
+    define('UPLOAD_CHUNK_SIZE', '${upload_chunk_size}');"
     echo "$config" > "$config_path"
     chown "${elabftw_user}":"${elabftw_group}" "$config_path"
     chmod 600 "$config_path"
